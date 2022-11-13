@@ -78,6 +78,7 @@ def _predict_tag_logreg(token, model, tags):
     log_probs = model.predict_log_proba([token.vector])[0]
     distribution = [tag_logprob_pair for tag_logprob_pair in zip(tags, log_probs)]
     sorted_distribution = sorted(distribution, key=lambda tag_logprob_pair: -tag_logprob_pair[1])
+    print(sorted_distribution)
     return sorted_distribution
 
 def train_tag_logreg(data):
