@@ -108,8 +108,6 @@ def train_tag_logreg(data):
             train_X.append(token.vector)
             train_y.append(bio_tag_map[token._.bio_slot_label])
 
-            
-
     ### Include the code in Appendix A of your report
     ################################################################
 
@@ -179,11 +177,8 @@ def predict_bio_tags(tag_predictor, validation_data, training_data):
                 for k in range(len(sample)):
                     if sample[k] == the_bio_tags[i] and k+1 <= len(sample) - 1 and sample[k + 1] == the_bio_tags[j]:
                         counter += 1
-            # print([the_bio_tags[i], the_bio_tags[j], counter])
             tags_bigrams.append({"first_biotag":the_bio_tags[i], "second_biotag":the_bio_tags[j], "is_valid":1 if counter > 0  else 0})
-    # print(tags_bigrams)
-    for tag in tags_bigrams:
-        print(tag)
+
 
     predictions = []
     for sample in validation_data: #iterating over samples
@@ -191,20 +186,15 @@ def predict_bio_tags(tag_predictor, validation_data, training_data):
         sample_predictions = []
         
         for index, token in enumerate(sample['annotated_text']): #iterating over tokens
-            # print(counter)            
             for i in range(len(tag_predictor(token))): #iterating over sorted predictions
                 if index <= 0:
-                    prev_prediction = tag_predictor(token)[0][0]
-                    sample_predictions.append(tag_predictor(token)[0][0])
+                    prev_prediction = tag_predictor(token)[i][0]
+                    sample_predictions.append(tag_predictor(token)[i][0])
                     break
                 else:
-                    # print(prev_prediction)
-                    # print(tag_predictor(token)[0][0])
-                    # print([tag for tag in tags_bigrams if tag["first_biotag"] == prev_prediction and tag["second_biotag"] == tag_predictor(token)[0][0]][0]["is_valid"])
-                    # print("/////////////////////////////////////////")
                     if [tag for tag in tags_bigrams if tag["first_biotag"] == prev_prediction and tag["second_biotag"] == tag_predictor(token)[i][0]][0]["is_valid"]:
-                        prev_prediction = tag_predictor(token)[0][0]
-                        sample_predictions.append(tag_predictor(token)[0][0])
+                        prev_prediction = tag_predictor(token)[i][0]
+                        sample_predictions.append(tag_predictor(token)[i][0])
                         break
                     else:
                         continue
