@@ -97,13 +97,23 @@ def train_tag_logreg(data):
     for sample in data:
         for token in sample['annotated_text']:
             bio_tags.add(token._.bio_slot_label)
+            # print(token._.bio_slot_label)
 
     bio_tags = sorted(bio_tags)
     bio_tag_map = {tag: idx for idx, tag in enumerate(bio_tags)}
-            
+
+
+
+    
+
+
+
     ################################################################
     ### TODO: Write code to set train_X, train_y, and token_count
-    ###
+    for sample in data:
+        for token in sample["annotated_text"]:
+            train_X.append(token.vector)
+            train_y.append(bio_tag_map[token._.bio_slot_label])
     ### Include the code in Appendix A of your report
     ################################################################
 
