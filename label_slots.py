@@ -78,7 +78,6 @@ def _predict_tag_logreg(token, model, tags):
     log_probs = model.predict_log_proba([token.vector])[0]
     distribution = [tag_logprob_pair for tag_logprob_pair in zip(tags, log_probs)]
     sorted_distribution = sorted(distribution, key=lambda tag_logprob_pair: -tag_logprob_pair[1])
-    print(sorted_distribution)
     return sorted_distribution
 
 def train_tag_logreg(data):
@@ -98,16 +97,9 @@ def train_tag_logreg(data):
     for sample in data:
         for token in sample['annotated_text']:
             bio_tags.add(token._.bio_slot_label)
-            # print(token._.bio_slot_label)
 
     bio_tags = sorted(bio_tags)
     bio_tag_map = {tag: idx for idx, tag in enumerate(bio_tags)}
-
-
-
-    
-
-
 
     ################################################################
     ### TODO: Write code to set train_X, train_y, and token_count
@@ -115,6 +107,9 @@ def train_tag_logreg(data):
         for token in sample["annotated_text"]:
             train_X.append(token.vector)
             train_y.append(bio_tag_map[token._.bio_slot_label])
+
+            
+
     ### Include the code in Appendix A of your report
     ################################################################
 
@@ -124,24 +119,24 @@ def train_tag_logreg(data):
     return lambda token: _predict_tag_logreg(token, model, bio_tags)
 
 
-def predict_independent_tags(tag_predictor, data):
+def predict_independent_tags(tag_predictor, validation_data, training_data):
     '''
     Predict tags independently of each other.
     
     Args:
         tag_predictor: function that predicts a tag, given a spacy token
-        data: data in NLU++ format imported from JSON, with spacy annotations
+        validation_data: validation_data in NLU++ format imported from JSON, with spacy annotations
 
     Returns:
         List(List(Str)): a list (one for each sample) of a list of tags (one for each word in the sample)
 
     '''
     predictions = []
-    for sample in data:
+    for sample in validation_data:
         predictions.append([tag_predictor(token)[0][0] for token in sample['annotated_text']])
     return predictions
 
-def predict_bio_tags(tag_predictor, data):
+def predict_bio_tags(tag_predictor, validation_data, training_data):
     '''
     Predict tags respecting BIO tagging constraints.
     
@@ -153,12 +148,69 @@ def predict_bio_tags(tag_predictor, data):
         List(List(Str)): a list (one for each sample) of a list of tags (one for each word in the sample)
 
     '''
-    predictions = []
-    for sample in data:
-        predictions.append([])
+    samples_biotags = []
+    bio_tags = set(['O'])
+    for sample in validation_data:
+        for token in sample['annotated_text']:
+            bio_tags.add(token._.bio_slot_label)
+            # print(token._.bio_slot_label)
+
+    bio_tags = sorted(bio_tags)
+
+
 
     ################################################################
     ### TODO: Write code to predict tags, obeying BIO constraints
+
+    for sample in training_data:
+        samples_biotags_example = []
+        for token in sample["annotated_text"]:
+            samples_biotags_example.append(token._.bio_slot_label)
+        samples_biotags.append(samples_biotags_example)
+
+    the_bio_tags = ["B-adults", "I-adults", "B-rooms", "I-rooms", "O"]
+    the_bio_tags = ['B-adults', 'I-adults', 'B-rooms', 'I-rooms', 'O', 'I-date', 'B-kids', 'B-date_from', 'I-people', 'B-date_to', 'I-time_to', 'B-time_period', 'I-date_to',  'I-date_from', 'B-person_name', 'I-time', 'B-time', 'B-number', 'I-kids',  'B-time_to', 'B-time_from', 'I-person_name', 'I-time_from', 'I-date_period', 'I-time_period', 'B-date_period', 'B-date', 'B-people']
+    tags_bigrams = []
+
+    for i in range(len(the_bio_tags)):
+        for j in range(len(the_bio_tags)):
+            counter = 0
+            for sample in samples_biotags:
+                for k in range(len(sample)):
+                    if sample[k] == the_bio_tags[i] and k+1 <= len(sample) - 1 and sample[k + 1] == the_bio_tags[j]:
+                        counter += 1
+            # print([the_bio_tags[i], the_bio_tags[j], counter])
+            tags_bigrams.append({"first_biotag":the_bio_tags[i], "second_biotag":the_bio_tags[j], "is_valid":1 if counter > 0  else 0})
+    # print(tags_bigrams)
+    for tag in tags_bigrams:
+        print(tag)
+
+    predictions = []
+    for sample in validation_data: #iterating over samples
+        prev_prediction = " "
+        sample_predictions = []
+        
+        for index, token in enumerate(sample['annotated_text']): #iterating over tokens
+            # print(counter)            
+            for i in range(len(tag_predictor(token))): #iterating over sorted predictions
+                if index <= 0:
+                    prev_prediction = tag_predictor(token)[0][0]
+                    sample_predictions.append(tag_predictor(token)[0][0])
+                    break
+                else:
+                    # print(prev_prediction)
+                    # print(tag_predictor(token)[0][0])
+                    # print([tag for tag in tags_bigrams if tag["first_biotag"] == prev_prediction and tag["second_biotag"] == tag_predictor(token)[0][0]][0]["is_valid"])
+                    # print("/////////////////////////////////////////")
+                    if [tag for tag in tags_bigrams if tag["first_biotag"] == prev_prediction and tag["second_biotag"] == tag_predictor(token)[i][0]][0]["is_valid"]:
+                        prev_prediction = tag_predictor(token)[0][0]
+                        sample_predictions.append(tag_predictor(token)[0][0])
+                        break
+                    else:
+                        continue
+                        
+        predictions.append(sample_predictions)
+
     ###
     ### Include the code in Appendix B of your report
     ################################################################
@@ -213,7 +265,7 @@ if __name__ == "__main__":
     model = train[args.model](training_data)
 
     print(f'> Predicting tags on validation set')
-    predictions = predict[args.predictor](model, validation_data)
+    predictions = predict[args.predictor](model, validation_data, training_data)
     
     if args.full_report:
         utils.visualise_bio_tags(predictions, validation_data)
