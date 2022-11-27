@@ -82,9 +82,16 @@ def _predict_tag_logreg(token, prev_token, model, tags):
     #     print("|||||||||||||||||||||||||||||||||||||||||||||||")
     vec = token.vector
     vec = np.append(vec, token.is_alpha)
-    vec = np.append(vec, token.is_stop)
+    vec = np.append(vec, token.is_stop * 10)
     vec = np.append(vec, token.dep/2**64)
-    vec = np.append(vec, token.is_digit)
+    vec = np.append(vec, token.is_digit * 10)
+    if prev_token:
+        vec = np.append(vec, prev_token.vector)
+    else:
+        # vec = np.append(vec, [0] * len(token.vector))
+        vec = np.append(vec, [0] * len(token.vector))
+    # if token.is_digit:
+    #     print(token.is_digit)
     log_probs = model.predict_log_proba(
         [vec])[0]
     distribution = [
@@ -114,15 +121,22 @@ def train_tag_logreg(data):
     bio_tags = sorted(bio_tags)
     bio_tag_map = {tag: idx for idx, tag in enumerate(bio_tags)}
     for sample in data:
+        prev_token = None
         for i, token in enumerate(sample["annotated_text"]):
             token_count += 1
             vec = token.vector
             vec = np.append(vec, token.is_alpha)
-            vec = np.append(vec, token.is_stop)
+            vec = np.append(vec, token.is_stop * 10)
             vec = np.append(vec, token.dep/2**64)
-            vec = np.append(vec, token.is_digit)
+            vec = np.append(vec, token.is_digit * 10)
+            if prev_token:
+                vec = np.append(vec, prev_token.vector)
+            else:
+                vec = np.append(vec, [0] * len(token.vector))
+            # print(vec)
             train_X.append(vec)
             train_y.append(bio_tag_map[token._.bio_slot_label])
+            prev_token = token
 
     print(f'> Training logistic regression model on {token_count} tokens')
     model = sklearn.linear_model.LogisticRegression(
