@@ -67,7 +67,7 @@ def train_tag_mle(data):
     return lambda token: _predict_tag_mle(token, model_parameters)
 
 
-def _predict_tag_logreg(token, model, tags):
+def _predict_tag_logreg(token, prev_token, model, tags):
     """
     Predict tag according to logistic regression on word embedding
     Args:
@@ -76,6 +76,10 @@ def _predict_tag_logreg(token, model, tags):
     Returns:
         (List(Tuple(str,float))): distribution over tags, sorted from most to least probable
     """
+    # if prev_token:
+    #     print("prev token is: " + str(prev_token.text))
+    #     print("curr token is: " + str(token.text))
+    #     print("|||||||||||||||||||||||||||||||||||||||||||||||")
     vec = token.vector
     vec = np.append(vec, token.is_alpha)
     vec = np.append(vec, token.is_stop)
@@ -124,7 +128,7 @@ def train_tag_logreg(data):
     model = sklearn.linear_model.LogisticRegression(
         multi_class='multinomial', solver='newton-cg').fit(train_X, train_y)
     print('> Finished training logistic regression')
-    return lambda token: _predict_tag_logreg(token, model, bio_tags)
+    return lambda token, prev_token: _predict_tag_logreg(token, prev_token, model, bio_tags)
 
 
 def predict_independent_tags(tag_predictor, validation_data, training_data):
@@ -139,7 +143,7 @@ def predict_independent_tags(tag_predictor, validation_data, training_data):
     '''
     predictions = []
     for sample in validation_data:
-        predictions.append([tag_predictor(token)[0][0]
+        predictions.append([tag_predictor(token, "prev tag")[0][0]
                            for token in sample['annotated_text']])
     return predictions
 
@@ -186,22 +190,23 @@ def predict_bio_tags(tag_predictor, validation_data, training_data):
     for sample in validation_data:  # iterating over samples
         prev_prediction = " "
         sample_predictions = []
-
+        prev_token = None
         # iterating over tokens
         for index, token in enumerate(sample['annotated_text']):
             # iterating over sorted predictions
-            for i in range(len(tag_predictor(token))):
+            for i in range(len(tag_predictor(token, prev_token))):
                 if index <= 0:
-                    prev_prediction = tag_predictor(token)[i][0]
-                    sample_predictions.append(tag_predictor(token)[i][0])
+                    prev_prediction = tag_predictor(token, prev_token)[i][0]
+                    sample_predictions.append(tag_predictor(token, prev_token)[i][0])
                     break
                 else:
-                    if [tag for tag in tags_bigrams if tag["first_biotag"] == prev_prediction and tag["second_biotag"] == tag_predictor(token)[i][0]][0]["is_valid"]:
-                        prev_prediction = tag_predictor(token)[i][0]
-                        sample_predictions.append(tag_predictor(token)[i][0])
+                    if [tag for tag in tags_bigrams if tag["first_biotag"] == prev_prediction and tag["second_biotag"] == tag_predictor(token, prev_token)[i][0]][0]["is_valid"]:
+                        prev_prediction = tag_predictor(token, prev_token)[i][0]
+                        sample_predictions.append(tag_predictor(token, prev_token)[i][0])
                         break
                     else:
                         continue
+            prev_token = token
 
         predictions.append(sample_predictions)
     return predictions
