@@ -15,9 +15,15 @@ def tokenise_annotate_and_convert_slot_labels_to_bio_tags(data, nlp_analyser):
        data (dict): raw data 
        nlp_analyser (spacy.lang.<Language>): spacy model
    """ 
+#    print(nlp_analyser.components)
    for sample in data:
        if 'text' in sample:
            sample['annotated_text'] = nlp_analyser(sample['text'])
+        #    for token in sample['annotated_text']:
+                # print("///////////////////////////")
+                # # print(token.keys)
+                # print(token.text, token.lemma_, token.pos_, token.tag_, token.dep_,
+                #     token.shape_, token.is_alpha, token.is_stop)
        if 'slots' in sample:
            for slot in sample['slots']:
                if 'span' in sample['slots'][slot]:

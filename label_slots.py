@@ -5,6 +5,7 @@ import os
 import sklearn.linear_model
 import spacy
 import sys
+import numpy as np
 import utils
 from collections import defaultdict
 
@@ -105,7 +106,10 @@ def train_tag_logreg(data):
     ### TODO: Write code to set train_X, train_y, and token_count
     for sample in data:
         for token in sample["annotated_text"]:
-            train_X.append(token.vector)
+            vec = token.vector
+            # vec = np.append(vec,[0.1,0.1,0.1,0.1])
+            # print(len(vec))
+            train_X.append(vec)
             train_y.append(bio_tag_map[token._.bio_slot_label])
 
     ### Include the code in Appendix A of your report
@@ -166,7 +170,7 @@ def predict_bio_tags(tag_predictor, validation_data, training_data):
             samples_biotags_example.append(token._.bio_slot_label)
         samples_biotags.append(samples_biotags_example)
 
-    the_bio_tags = ["B-adults", "I-adults", "B-rooms", "I-rooms", "O"]
+    # the_bio_tags = ["B-adults", "I-adults", "B-rooms", "I-rooms", "O"]
     the_bio_tags = ['B-adults', 'I-adults', 'B-rooms', 'I-rooms', 'O', 'I-date', 'B-kids', 'B-date_from', 'I-people', 'B-date_to', 'I-time_to', 'B-time_period', 'I-date_to',  'I-date_from', 'B-person_name', 'I-time', 'B-time', 'B-number', 'I-kids',  'B-time_to', 'B-time_from', 'I-person_name', 'I-time_from', 'I-date_period', 'I-time_period', 'B-date_period', 'B-date', 'B-people']
     tags_bigrams = []
 
@@ -181,6 +185,7 @@ def predict_bio_tags(tag_predictor, validation_data, training_data):
 
 
     predictions = []
+    # tags_bigrams[tags_bigrams["first_biotag"] == "B-adults" and tags_bigrams["second_biotag"] == "B-rooms"]["is_valid"] = 1
     for sample in validation_data: #iterating over samples
         prev_prediction = " "
         sample_predictions = []
@@ -248,6 +253,13 @@ if __name__ == "__main__":
 
     print("> Tokenising and annotating raw data")
     nlp_analyser = spacy.load("en_core_web_sm")
+    # nlp_analyser.add_pipe("lemmatizer", config={"mode": "lookup"})
+    # nlp_analyser.add_pipe("morphologizer")
+    nlp_analyser.add_pipe("merge_entities")
+    nlp_analyser.add_pipe("merge_noun_chunks")
+    # nlp_analyser.add_pipe("sentencizer")
+    # nlp_analyser.add_pipe("set_custom_boundaries", before="parser")
+
     utils.tokenise_annotate_and_convert_slot_labels_to_bio_tags(training_data, nlp_analyser)
     utils.tokenise_annotate_and_convert_slot_labels_to_bio_tags(validation_data, nlp_analyser)
 
