@@ -266,6 +266,7 @@ if __name__ == "__main__":
 
     print("> Tokenising and annotating raw data")
     nlp_analyser = spacy.load("en_core_web_sm")
+    # nlp_analyser = spacy.load("en_core_web_trf")
     utils.tokenise_annotate_and_convert_slot_labels_to_bio_tags(
         training_data, nlp_analyser)
     utils.tokenise_annotate_and_convert_slot_labels_to_bio_tags(
