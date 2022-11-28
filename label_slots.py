@@ -14,6 +14,55 @@ VALIDATION_FILE = "validation_data.json"
 
 spacy.tokens.token.Token.set_extension("bio_slot_label", default="O")
 
+def viterbi_algorithm(observations, states, start_p, trans_p, emit_p):
+    V = [{}]
+    print(observations)
+    for st in states:
+        #  print(observations[0])
+        #  print(emit_p[st])
+        #  print(emit_p[st][observations[0]])
+         V[0][st] = {"prob": start_p[st] * emit_p[st][observations[0]], "prev": None}
+   
+    for t in range(1, len(observations)):
+         V.append({})
+         for st in states:
+            max_tr_prob = V[t - 1][states[0]]["prob"] * trans_p[states[0]][st]
+            prev_st_selected = states[0]
+            for prev_st in states[1:]:
+                tr_prob = V[t - 1][prev_st]["prob"] * trans_p[prev_st][st]
+                if tr_prob > max_tr_prob:
+                    max_tr_prob = tr_prob
+                    prev_st_selected = prev_st
+ 
+            max_prob = max_tr_prob * emit_p[st][observations[t]]
+            V[t][st] = {"prob": max_prob, "prev": prev_st_selected}
+ 
+    opt = []
+    max_prob = 0.0
+    best_st = None
+ 
+    for st, data in V[-1].items():
+        if data["prob"] > max_prob:
+            max_prob = data["prob"]
+            best_st = st
+    opt.append(best_st)
+    previous = best_st
+ 
+ 
+    for t in range(len(V) - 2, -1, -1):
+        opt.insert(0, V[t + 1][previous]["prev"])
+        previous = V[t + 1][previous]["prev"]
+    
+    return opt
+ 
+ 
+def dptable(V):
+     
+    yield " ".join(("%12d" % i) for i in range(len(V)))
+    for state in V[0]:
+        yield "%.7s: " % state + " ".join("%.7s" % ("%f" % v[state]["prob"]) for v in V)
+
+
 def _predict_tag_mle(token, model_parameters):
     """
     Predict most-frequent-tag baseline, i.e. argmax_{<tag>} P(<tag> | <word>).
@@ -170,6 +219,7 @@ def predict_bio_tags(tag_predictor, validation_data, training_data):
     the_bio_tags = ['B-adults', 'I-adults', 'B-rooms', 'I-rooms', 'O', 'I-date', 'B-kids', 'B-date_from', 'I-people', 'B-date_to', 'I-time_to', 'B-time_period', 'I-date_to',  'I-date_from', 'B-person_name', 'I-time', 'B-time', 'B-number', 'I-kids',  'B-time_to', 'B-time_from', 'I-person_name', 'I-time_from', 'I-date_period', 'I-time_period', 'B-date_period', 'B-date', 'B-people']
     tags_bigrams = []
 
+    tags_bigrams_dict = defaultdict(dict)
     for i in range(len(the_bio_tags)):
         for j in range(len(the_bio_tags)):
             counter = 0
@@ -177,9 +227,15 @@ def predict_bio_tags(tag_predictor, validation_data, training_data):
                 for k in range(len(sample)):
                     if sample[k] == the_bio_tags[i] and k+1 <= len(sample) - 1 and sample[k + 1] == the_bio_tags[j]:
                         counter += 1
+            tags_bigrams_dict[the_bio_tags[i]][the_bio_tags[j]] = 1 if counter > 0  else 0
             tags_bigrams.append({"first_biotag":the_bio_tags[i], "second_biotag":the_bio_tags[j], "is_valid":1 if counter > 0  else 0})
     
     tags_counter = {}
+    for first_tag in tags_bigrams_dict:
+        tag_count = sum(tags_bigrams_dict[first_tag].values())
+        for second_tag in tags_bigrams_dict[first_tag]:
+            tags_bigrams_dict[first_tag][second_tag] = tags_bigrams_dict[first_tag][second_tag]/tag_count 
+
     for tag in the_bio_tags:
         counter = 0
         for index, tag_dict in enumerate(tags_bigrams):
@@ -198,25 +254,49 @@ def predict_bio_tags(tag_predictor, validation_data, training_data):
     
 
     predictions = []
+    emission_mat = defaultdict(dict)
+
     for sample in validation_data: #iterating over samples
-        prev_prediction = " "
-        sample_predictions = []
-        
         for index, token in enumerate(sample['annotated_text']): #iterating over tokens
             for i in range(len(tag_predictor(token))): #iterating over sorted predictions
-                if index <= 0:
-                    prev_prediction = tag_predictor(token)[i][0]
-                    sample_predictions.append(tag_predictor(token)[i][0])
-                    break
-                else:
-                    if [tag for tag in tags_bigrams if tag["first_biotag"] == prev_prediction and tag["second_biotag"] == tag_predictor(token)[i][0]][0]["is_valid"]:
-                        prev_prediction = tag_predictor(token)[i][0]
-                        sample_predictions.append(tag_predictor(token)[i][0])
-                        break
-                    else:
-                        continue
+                emission_mat[tag_predictor(token)[i][0]][token.text] = math.exp(tag_predictor(token)[i][1])
+    states = the_bio_tags
+    start_p = {}
+    for stat in states:
+        if stat[0] != "I":
+            start_p[stat] = 1/14
+        else:
+            start_p[stat] = 0 
+    
+    # print(emission_mat)
+    
+    for sample in validation_data: #iterating over samples
+        sentence_list = [token.text for token in sample['annotated_text']]
+        predictions.append(viterbi_algorithm(sentence_list, states, start_p, tags_bigrams_dict, emission_mat))
+
+    
+
+    # for sample in validation_data: #iterating over samples
+    #     prev_prediction = " "
+    #     sample_predictions = []
+        
+    #     for index, token in enumerate(sample['annotated_text']): #iterating over tokens
+    #         for i in range(len(tag_predictor(token))): #iterating over sorted predictions
+    #             if index <= 0:
+    #                 prev_prediction = tag_predictor(token)[i][0]
+    #                 sample_predictions.append(tag_predictor(token)[i][0])
+    #                 break
+    #             else:
+    #                 # if [tag for tag in tags_bigrams if tag["first_biotag"] == prev_prediction and tag["second_biotag"] == tag_predictor(token)[i][0]][0]["is_valid"]:
+    #                 if tags_bigrams_dict[prev_prediction][tag_predictor(token)[i][0]] > 0.0:
+    #                     prev_prediction = tag_predictor(token)[i][0]
+    #                     sample_predictions.append(tag_predictor(token)[i][0])
+    #                     break
+    #                 else:
+    #                     continue
+    #     # print(emission_mat)
                         
-        predictions.append(sample_predictions)
+    #     predictions.append(sample_predictions)
 
     ###
     ### Include the code in Appendix B of your report
