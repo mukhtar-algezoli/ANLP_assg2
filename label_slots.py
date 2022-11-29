@@ -17,32 +17,53 @@ spacy.tokens.token.Token.set_extension("bio_slot_label", default="O")
 
 
 def viterbi_algorithm(observations, states, start_p, trans_p, emit_p):
+    # this viterbi algorithm implementation
+    # is taken from the internet blog 
+    # https://www.pythonpool.com/viterbi-algorithm-python/
+    #but revised and commented by us
+    #contains probabilities of previous and current 
+    # tag sequence
     V = [{}]
-    print(observations)
+    # for each state in our states which are the biotags
+    #initilize it with the first probability for
+    #each by multiplying its start probability of the start 
+    #from start_p by this word biotag probability from the emission
+    #matrix
     for st in states:
-        #  print(observations[0])
-        #  print(emit_p[st])
-        #  print(emit_p[st][observations[0]])
          V[0][st] = {"prob": start_p[st] * emit_p[st][observations[0]], "prev": None}
-   
+    
+
+    # iterate over the next words
     for t in range(1, len(observations)):
          V.append({})
+         #iterate over the states
          for st in states:
+            #get the best next step by multiplying the probabilty of the
+            #previous step by the transition for the current and
+            #getting the maz of that
             max_tr_prob = V[t - 1][states[0]]["prob"] * trans_p[states[0]][st]
+            #save the selected state
             prev_st_selected = states[0]
+            # if the probability of the current path is 
+            #bigger than the probability of the previous
+            #best path sub by the new path values
             for prev_st in states[1:]:
                 tr_prob = V[t - 1][prev_st]["prob"] * trans_p[prev_st][st]
                 if tr_prob > max_tr_prob:
                     max_tr_prob = tr_prob
                     prev_st_selected = prev_st
  
+            # calculate the output probability of the best path
             max_prob = max_tr_prob * emit_p[st][observations[t]]
+            #append this new path
             V[t][st] = {"prob": max_prob, "prev": prev_st_selected}
  
     opt = []
     max_prob = 0.0
     best_st = None
  
+    #iterate over the path to find the best path
+    # path with max probability
     for st, data in V[-1].items():
         if data["prob"] > max_prob:
             max_prob = data["prob"]
@@ -55,7 +76,10 @@ def viterbi_algorithm(observations, states, start_p, trans_p, emit_p):
         opt.insert(0, V[t + 1][previous]["prev"])
         previous = V[t + 1][previous]["prev"]
     
+
+    #return output BIOtags for the best path
     return opt
+
 
 
 def _predict_tag_mle(token, model_parameters):
