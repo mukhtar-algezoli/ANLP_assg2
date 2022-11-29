@@ -55,12 +55,7 @@ def viterbi_algorithm(observations, states, start_p, trans_p, emit_p):
     
     return opt
  
- 
-def dptable(V):
-     
-    yield " ".join(("%12d" % i) for i in range(len(V)))
-    for state in V[0]:
-        yield "%.7s: " % state + " ".join("%.7s" % ("%f" % v[state]["prob"]) for v in V)
+
 
 
 def _predict_tag_mle(token, model_parameters):
