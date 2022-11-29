@@ -110,32 +110,66 @@ def train_tag_logreg(data):
     Returns:
         Callable: a function that returns a (sorted) distribution over tags, given a word.
     """
+    #counts the tokens
     token_count = 0
+    # training input features (embeddings in logistic regression)
     train_X = []
+    # training targets 
     train_y = []
+    # set that include biotags
     bio_tags = set(['O'])
-    for sample in data:
-        for token in sample['annotated_text']:
-            bio_tags.add(token._.bio_slot_label)
+    # this loop iterate over the anotated training samples 
+    #and collecte all possible bio_slot_labels
+    for sample in data: # iterating over the anotated sentences
+        for token in sample['annotated_text']: # get the text for each input 
+            bio_tags.add(token._.bio_slot_label) #adds the biotag label to bio_tags
 
     bio_tags = sorted(bio_tags)
+    # maps each tag to a unique index to make it appropriate as 
+    #a label to logistic regression (not necessary)
     bio_tag_map = {tag: idx for idx, tag in enumerate(bio_tags)}
+
+    #iterate over each anotated sample in the training data
     for sample in data:
+        # this variable is used to save the previous token so that we can use it as
+        #extra embedding to the logistic regression model
         prev_token = None
+        # iterate over the tokens for each example
         for i, token in enumerate(sample["annotated_text"]):
+            # count the number of tokens in our data
             token_count += 1
+            # invoke the embeddings from Spacy annotation
             vec = token.vector
+            # append the is_alpha value to the end of our vector
+            #this vector tells us if the vector has chars or not
             vec = np.append(vec, token.is_alpha)
+            # append is_stop value to the end of our vector
+            #is_stop tells us if the vector is_stop word or not (True, False)
+            # we extend the is_stop array to length of ten to emphasize its 
+            # importance 
             vec = np.append(vec, token.is_stop * 10)
+            # append dep value to the end of our vector
+            #dep value gives the Syntactic dependency relation.
             vec = np.append(vec, token.dep/2**64)
+            # append the is_digit value to the end of our vector
+            #this vector tells us if the vector is a number or not
+            # we extend the is_digit array to length of ten to emphasize its 
+            # importance 
             vec = np.append(vec, token.is_digit * 10)
+            # for each token if it is not in the beginning of the sentence 
+            # (has previous vector) we append that previous vector 
+            # embeddings to the end of our vector if our word in the beginning
+            #  of the sentence we append zeros
             if prev_token:
                 vec = np.append(vec, prev_token.vector)
             else:
                 vec = np.append(vec, [0] * len(token.vector))
-            # print(vec)
+            # append the embeddings vector of the current token to the input features
             train_X.append(vec)
+            # append the BIOtag to the target labels list
             train_y.append(bio_tag_map[token._.bio_slot_label])
+            # current token to be used as previous token to the next token in
+            #the sentence
             prev_token = token
 
     print(f'> Training logistic regression model on {token_count} tokens')
