@@ -15,32 +15,53 @@ VALIDATION_FILE = "validation_data.json"
 spacy.tokens.token.Token.set_extension("bio_slot_label", default="O")
 
 def viterbi_algorithm(observations, states, start_p, trans_p, emit_p):
+    # this viterbi algorithm implementation
+    # is taken from the internet blog 
+    # https://www.pythonpool.com/viterbi-algorithm-python/
+    #but revised and commented by us
+    #contains probabilities of previous and current 
+    # tag sequence
     V = [{}]
-    print(observations)
+    # for each state in our states which are the biotags
+    #initilize it with the first probability for
+    #each by multiplying its start probability of the start 
+    #from start_p by this word biotag probability from the emission
+    #matrix
     for st in states:
-        #  print(observations[0])
-        #  print(emit_p[st])
-        #  print(emit_p[st][observations[0]])
          V[0][st] = {"prob": start_p[st] * emit_p[st][observations[0]], "prev": None}
-   
+    
+
+    # iterate over the next words
     for t in range(1, len(observations)):
          V.append({})
+         #iterate over the states
          for st in states:
+            #get the best next step by multiplying the probabilty of the
+            #previous step by the transition for the current and
+            #getting the maz of that
             max_tr_prob = V[t - 1][states[0]]["prob"] * trans_p[states[0]][st]
+            #save the selected state
             prev_st_selected = states[0]
+            # if the probability of the current path is 
+            #bigger than the probability of the previous
+            #best path sub by the new path values
             for prev_st in states[1:]:
                 tr_prob = V[t - 1][prev_st]["prob"] * trans_p[prev_st][st]
                 if tr_prob > max_tr_prob:
                     max_tr_prob = tr_prob
                     prev_st_selected = prev_st
  
+            # calculate the output probability of the best path
             max_prob = max_tr_prob * emit_p[st][observations[t]]
+            #append this new path
             V[t][st] = {"prob": max_prob, "prev": prev_st_selected}
  
     opt = []
     max_prob = 0.0
     best_st = None
  
+    #iterate over the path to find the best path
+    # path with max probability
     for st, data in V[-1].items():
         if data["prob"] > max_prob:
             max_prob = data["prob"]
@@ -53,6 +74,8 @@ def viterbi_algorithm(observations, states, start_p, trans_p, emit_p):
         opt.insert(0, V[t + 1][previous]["prev"])
         previous = V[t + 1][previous]["prev"]
     
+
+    #return output BIOtags for the best path
     return opt
  
 
@@ -178,7 +201,8 @@ def predict_independent_tags(tag_predictor, validation_data, training_data):
         predictions.append([tag_predictor(token)[0][0] for token in sample['annotated_text']])
     return predictions
 
-def predict_bio_tags(tag_predictor, validation_data, training_data):
+def predict_bio_tags(tag_predictor, validation_data, 
+                training_data):
     '''
     Predict tags respecting BIO tagging constraints.
     
@@ -190,108 +214,147 @@ def predict_bio_tags(tag_predictor, validation_data, training_data):
         List(List(Str)): a list (one for each sample) of a list of tags (one for each word in the sample)
 
     '''
+    # we added the training data to function arguments
+    #to calculate bigrams sequences from it
+
+    # variable control which method we use,
+    #either greedy or viterbi
+    method = "greedy"
+    # this list variable will contains lists each 
+    #list represent the biotags of a sentence in
+    #the training data 
     samples_biotags = []
+    
     bio_tags = set(['O'])
-    for sample in validation_data:
-        for token in sample['annotated_text']:
-            bio_tags.add(token._.bio_slot_label)
+    # this loop iterate over the anotated samples
+    # in the validation data and collecte all 
+    # possible bio_slot_labels
+    for sample in validation_data:# iterating over the anotated sentences
+        for token in sample['annotated_text']:# get the text for each input
+            bio_tags.add(token._.bio_slot_label)#adds the biotag label to bio_tags
             # print(token._.bio_slot_label)
 
-    bio_tags = sorted(bio_tags)
 
-
-
-    ################################################################
-    ### TODO: Write code to predict tags, obeying BIO constraints
-
+    # iterate over annotated sentences in the training data
+    #building samples_biotags
     for sample in training_data:
         samples_biotags_example = []
         for token in sample["annotated_text"]:
             samples_biotags_example.append(token._.bio_slot_label)
         samples_biotags.append(samples_biotags_example)
 
-    the_bio_tags = ["B-adults", "I-adults", "B-rooms", "I-rooms", "O"]
-    the_bio_tags = ['B-adults', 'I-adults', 'B-rooms', 'I-rooms', 'O', 'I-date', 'B-kids', 'B-date_from', 'I-people', 'B-date_to', 'I-time_to', 'B-time_period', 'I-date_to',  'I-date_from', 'B-person_name', 'I-time', 'B-time', 'B-number', 'I-kids',  'B-time_to', 'B-time_from', 'I-person_name', 'I-time_from', 'I-date_period', 'I-time_period', 'B-date_period', 'B-date', 'B-people']
-    tags_bigrams = []
+    # this list contains all possible bio tags
+    the_bio_tags = ['B-adults', 'I-adults', 'B-rooms', 
+    'I-rooms', 'O', 'I-date', 'B-kids', 'B-date_from', 
+    'I-people', 'B-date_to', 'I-time_to', 'B-time_period', 
+    'I-date_to',  'I-date_from', 'B-person_name', 'I-time', 
+    'B-time', 'B-number', 'I-kids',  'B-time_to', 
+    'B-time_from', 'I-person_name', 'I-time_from', 
+    'I-date_period', 'I-time_period', 'B-date_period', 
+    'B-date', 'B-people']
 
+    # This nested dictionary will contain the probabilities for each
+    #bigram tags (0 means it is not valid)
     tags_bigrams_dict = defaultdict(dict)
-    for i in range(len(the_bio_tags)):
-        for j in range(len(the_bio_tags)):
-            counter = 0
-            for sample in samples_biotags:
-                for k in range(len(sample)):
+    for i in range(len(the_bio_tags)):#iterate over tags
+        for j in range(len(the_bio_tags)): #iterate over tags
+            counter = 0 #counts the number of time a tag bigram appear
+            for sample in samples_biotags: # iterate over the sample sentences
+                for k in range(len(sample)):# iterate over the tokens in each sample
+                    # if the the current token and the next one is equal
+                    #to the two BIOtags we are looking in, increment the counter
+                    #for that Bigram Bio tag
                     if sample[k] == the_bio_tags[i] and k+1 <= len(sample) - 1 and sample[k + 1] == the_bio_tags[j]:
                         counter += 1
+            # is a biotags bigram apear more than once set it as valid
+            # valid == 1, invalid == 0
             tags_bigrams_dict[the_bio_tags[i]][the_bio_tags[j]] = 1 if counter > 0  else 0
-            tags_bigrams.append({"first_biotag":the_bio_tags[i], "second_biotag":the_bio_tags[j], "is_valid":1 if counter > 0  else 0})
     
-    tags_counter = {}
+    #set the probability for each tag bigram by counting the number of
+    #valid bigrams with the the first tag and then dividing by that number
+    #each bigram with that first tag
     for first_tag in tags_bigrams_dict:
         tag_count = sum(tags_bigrams_dict[first_tag].values())
         for second_tag in tags_bigrams_dict[first_tag]:
             tags_bigrams_dict[first_tag][second_tag] = tags_bigrams_dict[first_tag][second_tag]/tag_count 
-
-    for tag in the_bio_tags:
-        counter = 0
-        for index, tag_dict in enumerate(tags_bigrams):
-            if tag_dict["first_biotag"] == tag and tag_dict["is_valid"] == 1:
-                counter += 1
-        tags_counter[tag] = counter
-    
-    tags_bigrams_pred = []
-    for tag in the_bio_tags:
-        for index, tag_dict in enumerate(tags_bigrams):
-            if tag_dict["first_biotag"] == tag and tag_dict["is_valid"] == 1:
-                # print(1/tags_counter[tag])
-                tags_bigrams_pred.append({"first_biotag":the_bio_tags[i], "second_biotag":the_bio_tags[j], "prob":1/tags_counter[tag]})
-            else:
-                tags_bigrams_pred.append({"first_biotag":the_bio_tags[i], "second_biotag":the_bio_tags[j], "prob":0.0})
     
 
+    #this will contain our output predictions
     predictions = []
-    emission_mat = defaultdict(dict)
 
-    for sample in validation_data: #iterating over samples
-        for index, token in enumerate(sample['annotated_text']): #iterating over tokens
-            for i in range(len(tag_predictor(token))): #iterating over sorted predictions
-                emission_mat[tag_predictor(token)[i][0]][token.text] = math.exp(tag_predictor(token)[i][1])
-    states = the_bio_tags
-    start_p = {}
-    for stat in states:
-        if stat[0] != "I":
-            start_p[stat] = 1/14
-        else:
-            start_p[stat] = 0 
-    
-    # print(emission_mat)
-    
-    for sample in validation_data: #iterating over samples
-        sentence_list = [token.text for token in sample['annotated_text']]
-        predictions.append(viterbi_algorithm(sentence_list, states, start_p, tags_bigrams_dict, emission_mat))
+    #Viterbi implementation
+    if method == "viterbi":
+        #this will be our emission matrix 
+        #a nested dict with tag as first key
+        #word as second key and probability
+        #as the value
+        emission_mat = defaultdict(dict)
 
-    
-
-    # for sample in validation_data: #iterating over samples
-    #     prev_prediction = " "
-    #     sample_predictions = []
+        # Iterate over each token in the validation data and
+        #run it through the model and append each (predicted tag, text of token,
+        # predicted probability) to emission_mat
+        for sample in validation_data: #iterating over samples
+            for index, token in enumerate(sample['annotated_text']): #iterating over tokens
+                for i in range(len(tag_predictor(token))): #iterating over sorted predictions
+                    #tag_predictor(token) produces the logistic regression 
+                    #predictions
+                    emission_mat[tag_predictor(token)[i][0]][token.text] = math.exp(tag_predictor(token)[i][1])
+                    #we apply exponent to the prediciton because the model
+                    #produces the log of the probability
+        #Viterbi states is the list of biotags
+        states = the_bio_tags
+        #the probability to start with each biotag
+        # it is 1/14 because all "I" tags can't be
+        #in the beginning of the list 
+        start_p = {}
+        for stat in states:
+            if stat[0] != "I":
+                start_p[stat] = 1/14
+            else:
+                start_p[stat] = 0 
         
-    #     for index, token in enumerate(sample['annotated_text']): #iterating over tokens
-    #         for i in range(len(tag_predictor(token))): #iterating over sorted predictions
-    #             if index <= 0:
-    #                 prev_prediction = tag_predictor(token)[i][0]
-    #                 sample_predictions.append(tag_predictor(token)[i][0])
-    #                 break
-    #             else:
-    #                 # if [tag for tag in tags_bigrams if tag["first_biotag"] == prev_prediction and tag["second_biotag"] == tag_predictor(token)[i][0]][0]["is_valid"]:
-    #                 if tags_bigrams_dict[prev_prediction][tag_predictor(token)[i][0]] > 0.0:
-    #                     prev_prediction = tag_predictor(token)[i][0]
-    #                     sample_predictions.append(tag_predictor(token)[i][0])
-    #                     break
-    #                 else:
-    #                     continue
-    #     # print(emission_mat)
-                        
-    #     predictions.append(sample_predictions)
+        
+        # iterate over the sentences and apply the Viterbi algorithm to each
+        #anotated sentence in the validation data
+        for sample in validation_data: #iterating over samples
+            sentence_list = [token.text for token in sample['annotated_text']]
+            #tags_bigrams_dict == transtions matrix
+            predictions.append(viterbi_algorithm(sentence_list, states, start_p, tags_bigrams_dict, emission_mat))
+
+    # the method value is greedy we use greedy algorithm instead
+    elif method == "greedy":
+        #iterate over the samples in the validaiton_data
+        for sample in validation_data: #iterating over samples
+            #we use prev prediction to check if a biotag and
+            #the one before it is valid or not
+            prev_prediction = " "
+            #predictions for each annotated sentence
+            sample_predictions = []
+            
+            #iterate over the tokens in each sample
+            for index, token in enumerate(sample['annotated_text']): #iterating over tokens
+                #iterating over sorted predictions for that token
+                #tag_predictor(token) produces the logistic regression 
+                #predictions
+                for i in range(len(tag_predictor(token))): 
+                    # if the index in the beginning of the 
+                    #sentence then accept the first prediction
+                    if index <= 0:
+                        prev_prediction = tag_predictor(token)[i][0]
+                        sample_predictions.append(tag_predictor(token)[i][0])
+                        break
+                    else:
+                        #if prev_tag, current prediction is not valid
+                        #its probability is zero continue to next prediction
+                        #for that token, else put it as the output
+                        if tags_bigrams_dict[prev_prediction][tag_predictor(token)[i][0]] > 0.0:
+                            prev_prediction = tag_predictor(token)[i][0]
+                            sample_predictions.append(tag_predictor(token)[i][0])
+                            break
+                        else:
+                            continue
+            #append the output predictions for the sentence                            
+            predictions.append(sample_predictions)
 
     ###
     ### Include the code in Appendix B of your report
